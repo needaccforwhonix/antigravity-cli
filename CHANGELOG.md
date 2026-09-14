@@ -4,6 +4,78 @@
 
 The terminal-first surface to interact with Antigravity agents. Stay in your flow without context switching.
 
+## 1.2.2
+
+- Improved the startup warning for deprecated `unsandboxed` permission rules across CLI, shared, and project configuration files to list each affected file path, up to five offending rules, and step-by-step instructions for migrating them to `command` rules.
+- Improved `/resume` startup responsiveness when opening a large conversation history with a cold or stale summary cache.
+- Fixed MCP servers bundled inside plugins colliding with each other or with user-configured servers in `mcp_config.json` when they shared the same server name by automatically namespacing plugin MCP servers as `<plugin>_<server>`.
+- Fixed a memory leak where opening or scanning conversations left background step-cache eviction goroutines running for the rest of the session, significantly reducing memory usage after opening `/resume` or switching conversations.
+- Fixed `view_file` attempting to parse non-UTF-8 binary files as text or loading files larger than 100 MB into the model context; unsupported binary formats and oversized files are now rejected with a clear error before overflowing the context window.
+- Fixed Gemini API (`GEMINI_API_KEY`) sessions dropping model thinking blocks from prior turns on subsequent user messages and failing to propagate thought signatures on text and thought parts.
+- Fixed artifact review failing to trigger when a directory name above `.gemini/` matched a skipped path component such as `scratch`, prevented conversation forks and snapshot reverts from copying internal `.system_generated/subagents` and `.system_generated/worktrees` directories, and cleaned up subagent metadata records when deleting a conversation.
+- Fixed deleted conversations being recreated as empty, schema-less SQLite database files when background queries reconnected after deletion.
+- Fixed conversations launched without a workspace folder inheriting workspace paths and customizations from other open sessions.
+
+## 1.2.1
+
+- Added support for `excludeDefaultComponents: true` in custom agent Markdown frontmatter, allowing custom agents to opt out of default prompt sections and built-in tools while preserving post-invocation hooks.
+- Improved model API error resilience and diagnostics: transient `genai.APIError` failures (`502`, `503`, `504`, per-minute `429` rate limits, and mid-stream interruptions) automatically retry in-process with exponential backoff while preserving completed tool call outputs, and unrecovered `503` and `429` responses surface clear user-facing error messages.
+- Improved MCP and provider tool schema validation to preserve open object schemas (such as `{"type": "object"}` or explicit `additionalProperties: true`) instead of rejecting undeclared arguments on schemas that allow them.
+- Improved per-turn responsiveness and reduced memory usage when opening large conversations.
+- Fixed `--continue` starting a brand-new conversation when launched from a subdirectory, after a crash, or while another session is open in the same workspace; it now falls back to the most recent non-empty conversation in the current workspace or its parent/child directories.
+- Fixed full-screen blank flashes in inline mode when content first pushes to scrollback, at the end of a turn, or when clearing the screen with `Ctrl+L`.
+- Fixed remote companion UIs connected to an interactive CLI session via Remote Control displaying an unauthenticated sign-in screen instead of the active session's signed-in state.
+- Fixed the status line reporting the terminal sandbox as disabled when the session was launched with the `--sandbox` command-line flag.
+- Fixed image zoom keys (`Ctrl+=` and `Ctrl+-`) and the footer zoom hint appearing in the artifact viewer when a Mermaid diagram is rendered in ASCII mode instead of as a Kitty image.
+
+## 1.2.0
+
+- Added the `remote-control start`, `remote-control status`, and `remote-control stop` subcommands to run the CLI as a background service registered with your operating system's service manager so your machine stays reachable across logouts and reboots; `remote-control start --name <label>` sets a custom machine label in the Remote Control instance list, and `--session` scopes the service to your active login session.
+- Improved half-page scrolling across all scrollable views — including altscreen mode, the diff viewer, and read-only detail panels where `ctrl+d` no longer triggers the exit prompt — and set `shift+up` and `shift+down` as customizable default keybindings for half-page navigation (`navigation.half_page_up` and `navigation.half_page_down`).
+- Fixed prompts or model responses blocked by content safety filters failing with a spurious "no candidate found" error, ending silently with an empty turn, or repeatedly retrying the rejected input; the CLI now surfaces a clear content-filter stop reason.
+- Fixed temporary working files written to the agent `scratch/` directory triggering recursive filesystem watchers and appearing as noisy entries in the artifact review panel and checkpoints.
+- Fixed MCP servers bundled inside globally installed plugins failing to initialize at CLI startup or failing to update their running status when plugins are enabled or disabled.
+- Fixed third-party MCP server tools failing schema validation when their input schemas omit `additionalProperties`.
+- Fixed unnecessary filesystem customization discovery walks running on every user message even when no slash command is invoked, reducing latency before the agent begins responding.
+- Fixed every log line in `cli.log` and background daemon subcommand output being prefixed with a spurious `ERROR: logging before google.Init` message.
+- Fixed the macOS `remote-control` background service terminating shortly after startup when launched by the system service manager, `remote-control start` and `remote-control stop` leaving legacy installer-script background services running, and the Remote Control setting being unavailable when your access comes from a paid Google Cloud project.
+- Fixed older conversations failing to load with an `unknown step type` error when resumed.
+
+## 1.1.28
+
+- Improved resilience to transient model API errors: the agent now retries errors such as `503 Unavailable` for much longer with exponential backoff, so a brief service hiccup no longer aborts your session.
+- Improved sign-in and startup speed by reading your signed-in identity from the stored credential instead of making a network request on every launch and after browser consent; a failed identity lookup no longer prevents sign-in from completing, and the displayed plan tier no longer briefly disappears during startup.
+- Improved headless (`-p`) runs to exit promptly once the final answer is delivered: the CLI waits for running background tasks and scheduled timers to finish, bound by `--print-timeout`, and leaves daemon background tasks such as dev servers running instead of terminating them.
+- Improved failure reporting in headless (`-p`) runs: fatal errors now appear on stderr with a stable `error:` marker, a note is printed when the response may be truncated, and runs that previously ended silently with no output now explain why.
+- Improved headless (`-p`) turnaround by cutting up to 200 ms of idle latency per turn and skipping the model call that generated a conversation title no one would see.
+- Improved tool approval prompts to say exactly what you are approving — for example `Run this command?`, `Allow access to this URL?`, or `Allow calling this tool?` — with the command-editing shortcut offered only when a command is being approved, and a `Reason:` line explaining why approval is being requested when it is not obvious, such as a hook flagging the action or a file belonging to a different project.
+- Improved model selection auditability: the CLI log now records whenever a model name you specify resolves to a different model, such as alias resolution, `--effort` variant selection, or replacement of a deprecated saved model.
+- Changed what happens when `--print-timeout` expires mid-turn: the CLI now returns the partial output it has and exits successfully with a warning on stderr, instead of failing with a timeout error; interrupts such as Ctrl+C still exit non-zero.
+- Changed the default permission for fetching URLs from always allowed to asking first, so the agent now requests approval before reading a URL unless you have granted access.
+- Fixed plugin reinstalls keeping files that had been deleted from the source: installing a plugin now replaces its managed directory exactly, installing a plugin from its own installed directory is refused instead of corrupting it, and uninstalling a plugin no longer leaves its enabled/disabled entry behind in `config.json`.
+- Fixed MCP servers defined by plugins resolving relative or unset working directories against the wrong location; they now resolve against the plugin's own directory so plugin-bundled scripts run correctly.
+- Fixed a startup race where subagents could fail to find tools from MCP servers that were still initializing.
+- Fixed subagents sometimes appearing stuck in a running state after they had finished — especially in very large conversations — which also left queued when-idle messages undelivered until restart.
+- Fixed a memory leak where every finished terminal command kept internal state alive for the rest of the session; long sessions that run many commands now use significantly less memory.
+- Fixed headless (`-p`) runs stalling forever on implementation-plan approval that no one could give; non-interactive runs now proceed through plan review automatically.
+- Fixed sign-in failing with a project access error after switching from a business account with a selected project to a personal account; stale business project and license details are now fully cleared on personal sign-in.
+
+## 1.1.27
+
+- Added `/model <name> <prompt>`, which runs a single prompt on another model and then returns the session to the model it was using, so you can consult a different model mid-conversation without disturbing your saved default.
+- Added a `conversation_title` field to the JSON payload passed to custom status line and window title scripts, so they can show the active conversation's name and pick up renames immediately.
+- Added an `agents` list to custom agent Markdown frontmatter, letting an agent declare the subagents it depends on using the same workspace-relative, absolute, and agent-relative path rules as `skills`.
+- Improved `/model` to show a `[model]` argument hint as you type, so the command's arguments are discoverable without opening help.
+- Improved the `/settings` panel so each Verbosity option explains itself as you highlight it, describing whether tool calls, commands, and thoughts are shown in full or collapsed into a token metrics table.
+- Improved the sign-in and Google Cloud setup screens to use the CLI's standard styled key hints, which follow your color scheme and keybindings and drop the navigation hint when only one option is available.
+- Changed `/model <name>` to report `Model already set to <name>` when the session is already using that model, instead of reporting a switch that did not happen.
+- Fixed tool calls to MCP servers accepting arguments the server's own schema never declared, so an invented parameter is now rejected and corrected instead of being silently dropped.
+- Fixed headless runs with `-p` silently skipping tool actions they were not permitted to take, which now end with a notice naming the refused actions and report them as `denied_actions` in the JSON output.
+- Fixed `?` in Vim Normal mode opening the shortcuts panel while the prompt already contained text, so character-search and replace operators such as `f?`, `t?`, and `df?` work; `?` still opens shortcuts on an empty prompt.
+- Fixed `/model` with no argument doing nothing when run before the session had finished starting up, so it now opens the model picker.
+- Fixed print mode (`-p`) exiting before the session finished shutting down, which could drop the run's trailing conversation history before it reached disk.
+- Fixed a redundant approval prompt when the agent reads or writes another conversation's artifact files after you have already allowed access to files outside your workspace.
+
 ## 1.1.26
 
 - Added half-page scrolling with `Ctrl+D` and `Ctrl+U` to the artifact viewer.
